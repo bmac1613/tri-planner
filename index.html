@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Tri Planner">
+  <meta name="theme-color" content="#0f172a">
+  <title>Tri Planner</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root {
+      --bg:         #f1f5f9;
+      --surface:    #ffffff;
+      --border:     #e2e8f0;
+      --text:       #0f172a;
+      --text-2:     #64748b;
+      --text-3:     #94a3b8;
+      --nav-bg:     #ffffff;
+
+      --c-swim: #3b82f6;
+      --c-bike: #f59e0b;
+      --c-run:  #10b981;
+      --c-lift: #8b5cf6;
+      --c-race: #ef4444;
+      --c-def:  #64748b;
+
+      --safe-top:    env(safe-area-inset-top, 20px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:      #0f172a;
+        --surface: #1e293b;
+        --border:  #334155;
+        --text:    #f1f5f9;
+        --text-2:  #94a3b8;
+        --text-3:  #64748b;
+        --nav-bg:  #1e293b;
+      }
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box; margin: 0; padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+    input  { font-family: inherit; }
+    [hidden] { display: none !important; }
+
+    /* ── Setup ─────────────────────────────────── */
+    #setup {
+      display: flex; flex-direction: column; gap: 1rem;
+      min-height: 100dvh;
+      padding: calc(var(--safe-top) + 3rem) 1.5rem calc(var(--safe-bottom) + 2rem);
+    }
+
+    #setup h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -.03em; }
+    #setup .sub { color: var(--text-2); font-size: .9rem; line-height: 1.5; }
+
+    .field { display: flex; flex-direction: column; gap: .375rem; }
+    .field label {
+      font-size: .7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--text-2);
+    }
+    .field input {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: 10px; padding: .75rem 1rem;
+      font-size: 1rem; color: var(--text); outline: none;
+    }
+    .field input:focus { border-color: var(--c-swim); }
+
+    .btn-primary {
+      background: var(--text); color: var(--bg);
+      border-radius: 12px; padding: .875rem 1.5rem;
+      font-size: 1rem; font-weight: 600;
+    }
+    .btn-primary:active { opacity: .8; }
+
+    .hint { font-size: .75rem; color: var(--text-3); line-height: 1.55; }
+
+    /* ── App Shell ─────────────────────────────── */
+    #app { display: flex; flex-direction: column; min-height: 100dvh; }
+
+    /* Header */
+    #header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: calc(var(--safe-top) + .875rem) 1.25rem .875rem;
+      display: flex; align-items: flex-end; justify-content: space-between;
+    }
+
+    #date-label { font-size: 1.3rem; font-weight: 700; letter-spacing: -.025em; }
+    #week-label { font-size: .75rem; color: var(--text-2); margin-top: .2rem; }
+
+    .badge {
+      display: inline-block; font-size: .6rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .07em;
+      padding: .2rem .45rem; border-radius: 999px;
+      background: var(--border); color: var(--text-2);
+      margin-left: .4rem; vertical-align: middle;
+    }
+    .badge.build    { background:#dbeafe; color:#1d4ed8; }
+    .badge.peak     { background:#fef3c7; color:#b45309; }
+    .badge.taper    { background:#d1fae5; color:#065f46; }
+    .badge.recovery { background:#f3e8ff; color:#6b21a8; }
+    .badge.travel   { background:#fef9c3; color:#713f12; }
+    .badge.shakeout { background:#d1fae5; color:#065f46; }
+    .badge.race     { background:#fee2e2; color:#b91c1c; }
+
+    @media (prefers-color-scheme: dark) {
+      .badge.build    { background:#1e3a5f; color:#93c5fd; }
+      .badge.peak     { background:#451a03; color:#fcd34d; }
+      .badge.taper    { background:#052e16; color:#6ee7b7; }
+      .badge.recovery { background:#2e1065; color:#c4b5fd; }
+      .badge.travel   { background:#422006; color:#fde68a; }
+      .badge.shakeout { background:#052e16; color:#6ee7b7; }
+      .badge.race     { background:#450a0a; color:#fca5a5; }
+    }
+
+    #btn-refresh {
+      font-size: 1.2rem; padding: .4rem; border-radius: 8px;
+      color: var(--text-2); line-height: 1; transition: transform .6s linear;
+    }
+    #btn-refresh.spinning { animation: spin .8s linear infinite; }
+    #btn-refresh:active { background: var(--border); }
+
+    /* Content */
+    #content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+    .view { padding: 1rem 1rem calc(1rem + var(--safe-bottom)); }
+
+    /* Bottom nav */
+    #nav {
+      background: var(--nav-bg); border-top: 1px solid var(--border);
+      display: flex; padding-bottom: var(--safe-bottom);
+    }
+
+    #nav button {
+      flex: 1; padding: .625rem .5rem .5rem;
+      font-size: .7rem; font-weight: 500; color: var(--text-3);
+      display: flex; flex-direction: column; align-items: center; gap: .2rem;
+    }
+    #nav button .icon { font-size: 1.2rem; }
+    #nav button.active { color: var(--text); font-weight: 700; }
+
+    /* ── Section label ─────────────────────────── */
+    .section-label {
+      font-size: .65rem; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--text-3);
+      padding-bottom: .625rem;
+    }
+
+    /* Load summary */
+    .load-summary {
+      font-size: .8rem; color: var(--text-2);
+      padding-bottom: .75rem; display: flex; gap: .75rem;
+    }
+    .load-chip {
+      display: flex; align-items: center; gap: .3rem;
+    }
+    .load-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+    /* ── Session Cards ──────────────────────────── */
+    .card-list { display: flex; flex-direction: column; gap: .625rem; }
+
+    .card {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: 14px; overflow: hidden;
+      transition: opacity .2s;
+    }
+    .card.done { opacity: .5; }
+
+    .card-inner { border-left: 4px solid transparent; }
+
+    .card-header {
+      display: flex; align-items: center; gap: .75rem;
+      padding: .875rem 1rem; cursor: pointer; user-select: none;
+    }
+
+    .disc-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+    .card-meta { flex: 1; min-width: 0; }
+    .card-title { font-size: .875rem; font-weight: 600; }
+    .card-sub { font-size: .72rem; color: var(--text-2); margin-top: .1rem; }
+
+    .card-right { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+    .card-dur { font-size: .825rem; font-weight: 500; color: var(--text-2); }
+    .card-check { color: #10b981; font-size: .95rem; }
+
+    .opt-badge {
+      font-size: .6rem; font-weight: 700; letter-spacing: .05em;
+      text-transform: uppercase; color: #b45309; background: #fef3c7;
+      padding: .15rem .35rem; border-radius: 4px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .opt-badge { background: #451a03; color: #fcd34d; }
+    }
+
+    /* Card body (expanded) */
+    .card-body { display: none; padding: 0 1rem 1rem; }
+    .card.open .card-body { display: block; }
+
+    .card-desc {
+      font-size: .825rem; line-height: 1.6; color: var(--text-2);
+      padding-bottom: .875rem; border-bottom: 1px solid var(--border);
+      margin-bottom: .75rem;
+    }
+    .card-desc strong { color: var(--text); }
+
+    .actions { display: flex; gap: .5rem; }
+
+    .btn-done {
+      flex: 1; padding: .6rem .75rem; border-radius: 10px;
+      font-size: .825rem; font-weight: 600; text-align: center;
+      background: #10b981; color: white;
+    }
+    .btn-done:active { opacity: .8; }
+
+    .btn-done-already {
+      flex: 1; padding: .6rem .75rem; border-radius: 10px;
+      font-size: .825rem; font-weight: 600; text-align: center;
+      background: var(--border); color: var(--text-3);
+    }
+
+    .btn-shift {
+      flex: 1; padding: .6rem .75rem; border-radius: 10px;
+      font-size: .825rem; font-weight: 600; text-align: center;
+      border: 1.5px solid var(--border);
+    }
+    .btn-shift:active { opacity: .7; }
+
+    /* Shift picker */
+    .shift-picker { display: none; margin-top: .75rem; padding-top: .75rem; border-top: 1px solid var(--border); }
+    .shift-picker.open { display: block; }
+    .shift-label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); margin-bottom: .4rem; }
+    .shift-days { display: flex; gap: .375rem; flex-wrap: wrap; }
+    .shift-btn {
+      padding: .375rem .7rem; border-radius: 8px; font-size: .775rem; font-weight: 500;
+      border: 1.5px solid var(--border); background: var(--bg);
+    }
+    .shift-btn:active { opacity: .7; }
+
+    /* ── Rest day ───────────────────────────────── */
+    .rest {
+      text-align: center; padding: 2.5rem 1rem; color: var(--text-3);
+    }
+    .rest-icon { font-size: 2.25rem; margin-bottom: .5rem; }
+    .rest-label { font-size: .95rem; font-weight: 600; color: var(--text-2); }
+
+    /* ── Week Strip ─────────────────────────────── */
+    .week-strip {
+      display: flex; gap: .25rem;
+      overflow-x: auto; padding-bottom: .875rem;
+      scrollbar-width: none;
+    }
+    .week-strip::-webkit-scrollbar { display: none; }
+
+    .wday {
+      display: flex; flex-direction: column; align-items: center; gap: .2rem;
+      padding: .45rem .6rem; border-radius: 10px; min-width: 42px;
+      flex-shrink: 0; cursor: pointer;
+    }
+    .wday.sel { background: var(--text); color: var(--bg); }
+    .wday-name { font-size: .6rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .wday-num  { font-size: .975rem; font-weight: 700; }
+    .wday-dots { display: flex; gap: 2px; min-height: 6px; }
+    .wdot { width: 5px; height: 5px; border-radius: 50%; }
+
+    /* ── Skeleton ───────────────────────────────── */
+    .skel {
+      background: var(--border); border-radius: 14px; height: 68px;
+      animation: pulse 1.3s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+    @keyframes spin  { to{transform:rotate(360deg)} }
+
+    /* ── Error ──────────────────────────────────── */
+    .error-state { text-align: center; padding: 2rem 1rem; }
+    .error-state p { color: var(--text-2); font-size: .875rem; margin-bottom: 1rem; line-height: 1.5; }
+
+    /* ── Settings ───────────────────────────────── */
+    .settings-block {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: 14px; padding: 1rem; font-size: .875rem;
+      color: var(--text-2); line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════
+     SETUP SCREEN
+═════════════════════════════════════════════════ -->
+<div id="setup">
+  <div>
+    <h1>Tri Planner</h1>
+    <p class="sub" style="margin-top:.5rem">Connect to your training vault on GitHub to get started.</p>
+  </div>
+
+  <div class="field">
+    <label>GitHub Username</label>
+    <input id="in-owner" type="text" placeholder="yourusername" autocapitalize="none" autocorrect="off" spellcheck="false">
+  </div>
+
+  <div class="field">
+    <label>Repository</label>
+    <input id="in-repo" type="text" value="coding-2026" autocapitalize="none" autocorrect="off" spellcheck="false">
+  </div>
+
+  <div class="field">
+    <label>Personal Access Token</label>
+    <input id="in-token" type="password" placeholder="ghp_..." autocapitalize="none" autocorrect="off" spellcheck="false">
+  </div>
+
+  <button class="btn-primary" id="btn-connect">Get Started →</button>
+
+  <p class="hint">
+    Generate a token at GitHub → Settings → Developer settings → Personal access tokens (classic).
+    Grant the <strong>repo</strong> scope so the app can read and write session files.
+  </p>
+</div>
+
+<!-- ════════════════════════════════════════════════
+     MAIN APP
+═════════════════════════════════════════════════ -->
+<div id="app" hidden>
+  <header id="header">
+    <div>
+      <div id="date-label"></div>
+      <div id="week-label"></div>
+    </div>
+    <button id="btn-refresh" title="Refresh">↺</button>
+  </header>
+
+  <main id="content">
+    <div id="v-today" class="view"></div>
+    <div id="v-week"  class="view" hidden></div>
+    <div id="v-settings" class="view" hidden>
+      <div class="section-label">Configuration</div>
+      <div class="settings-block">
+        <div id="settings-info"></div>
+        <button class="btn-primary" id="btn-reset" style="margin-top:1rem;width:100%">Reset &amp; Reconnect</button>
+      </div>
+    </div>
+  </main>
+
+  <nav id="nav">
+    <button data-view="today" class="active"><span class="icon">📅</span>Today</button>
+    <button data-view="week"><span class="icon">📆</span>Week</button>
+    <button data-view="settings"><span class="icon">⚙️</span>Settings</button>
+  </nav>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════════════
+const PLAN_PATH  = 'triathlon/plan';
+const GITHUB_API = 'https://api.github.com';
+
+function loadConfig() {
+  try {
+    const cfg = JSON.parse(localStorage.getItem('tri-cfg') || 'null');
+    const tok = localStorage.getItem('tri-tok');
+    return (cfg && tok) ? { ...cfg, token: tok } : null;
+  } catch { return null; }
+}
+
+function saveConfig(owner, repo, token) {
+  localStorage.setItem('tri-cfg', JSON.stringify({ owner, repo }));
+  localStorage.setItem('tri-tok', token);
+}
+
+// ══════════════════════════════════════════════════════
+//  DATE UTILS
+// ══════════════════════════════════════════════════════
+const D = {
+  today() {
+    return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+  },
+  add(d, n) {
+    const dt = new Date(d + 'T12:00:00');
+    dt.setDate(dt.getDate() + n);
+    return dt.toLocaleDateString('en-CA');
+  },
+  weekStart(d) {
+    const dt = new Date(d + 'T12:00:00');
+    const day = dt.getDay(); // 0=Sun
+    const diff = day === 0 ? -6 : 1 - day;
+    dt.setDate(dt.getDate() + diff);
+    return dt.toLocaleDateString('en-CA');
+  },
+  weekDays(ws) {
+    return Array.from({ length: 7 }, (_, i) => D.add(ws, i));
+  },
+  longFormat(d) {
+    return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric'
+    });
+  },
+  shortFormat(d) {
+    const dt = new Date(d + 'T12:00:00');
+    return {
+      name: dt.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase(),
+      num:  dt.getDate()
+    };
+  },
+  shiftLabel(d) {
+    return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric'
+    });
+  },
+  diff(a, b) {
+    return Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 86400000);
+  }
+};
+
+// ══════════════════════════════════════════════════════
+//  YAML FRONTMATTER
+// ══════════════════════════════════════════════════════
+const FM = {
+  parse(raw) {
+    const m = raw.match(/^---\n([\s\S]*?)\n---/);
+    if (!m) return {};
+    const obj = {};
+    for (const line of m[1].split('\n')) {
+      const ci = line.indexOf(':');
+      if (ci < 0) continue;
+      const k = line.slice(0, ci).trim();
+      const v = line.slice(ci + 1).trim();
+      if (v === 'true')                   obj[k] = true;
+      else if (v === 'false')             obj[k] = false;
+      else if (v === '' || v === 'null')  obj[k] = null;
+      else if (/^\d+$/.test(v))          obj[k] = parseInt(v, 10);
+      else                               obj[k] = v.replace(/^["']|["']$/g, '');
+    }
+    return obj;
+  },
+
+  set(raw, updates) {
+    return raw.replace(/^---\n[\s\S]*?\n---/, block => {
+      let inner = block.slice(4, -4);
+      for (const [k, v] of Object.entries(updates)) {
+        const val = (v === null || v === undefined) ? '' : String(v);
+        inner = inner.replace(new RegExp(`^(${k}:).*$`, 'm'), `$1 ${val}`);
+      }
+      return `---\n${inner}\n---`;
+    });
+  }
+};
+
+// ══════════════════════════════════════════════════════
+//  GITHUB API
+// ══════════════════════════════════════════════════════
+function makeAPI({ owner, repo, token }) {
+  const h = { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' };
+  const base = `${GITHUB_API}/repos/${owner}/${repo}/contents`;
+
+  function decode(b64) {
+    return decodeURIComponent(
+      atob(b64.replace(/\s/g, '')).split('').map(c =>
+        '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join('')
+    );
+  }
+
+  function encode(str) {
+    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/gi,
+      (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+  }
+
+  return {
+    async list() {
+      const r = await fetch(`${base}/${PLAN_PATH}`, { headers: h });
+      if (!r.ok) throw new Error(`GitHub ${r.status}: ${r.statusText}`);
+      return r.json();
+    },
+    async get(path) {
+      const r = await fetch(`${base}/${path}`, { headers: h });
+      if (!r.ok) throw new Error(`Cannot read ${path}`);
+      const d = await r.json();
+      return { content: decode(d.content), sha: d.sha, path: d.path };
+    },
+    async put(path, content, sha, msg) {
+      const r = await fetch(`${base}/${path}`, {
+        method: 'PUT',
+        headers: { ...h, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg, content: encode(content), sha })
+      });
+      if (!r.ok) throw new Error(`Write failed ${r.status}`);
+      return r.json();
+    }
+  };
+}
+
+// ══════════════════════════════════════════════════════
+//  DISCIPLINE HELPERS
+// ══════════════════════════════════════════════════════
+const DISC = {
+  color(d) {
+    return { swim:'var(--c-swim)', bike:'var(--c-bike)', run:'var(--c-run)',
+             lift:'var(--c-lift)', race:'var(--c-race)' }[d] || 'var(--c-def)';
+  },
+  label(discipline, type) {
+    return `${(discipline||'').toUpperCase()} · ${type||''}`;
+  },
+  dur(mins) {
+    if (!mins) return '';
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+  }
+};
+
+function extractBody(raw) {
+  const m = raw.match(/\n# .+\n\n([\s\S]*?)(?:\n\nTopics:|$)/);
+  if (!m) return '';
+  return m[1].trim().replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+}
+
+// ══════════════════════════════════════════════════════
+//  APP STATE
+// ══════════════════════════════════════════════════════
+const App = {
+  config:   null,
+  api:      null,
+  sessions: [],
+  loading:  false,
+  view:     'today',
+  today:    D.today(),
+  weekStart: null,
+  selDay:   null,
+  openCard: null,
+  shiftOpen: null,
+
+  async init() {
+    this.weekStart = D.weekStart(this.today);
+    this.selDay    = this.today;
+    this.config    = loadConfig();
+
+    if (!this.config) { this.showSetup(); return; }
+    this.api = makeAPI(this.config);
+    this.showApp();
+    await this.load();
+  },
+
+  showSetup() {
+    document.getElementById('setup').removeAttribute('hidden');
+    document.getElementById('app').setAttribute('hidden', '');
+  },
+
+  showApp() {
+    document.getElementById('setup').setAttribute('hidden', '');
+    document.getElementById('app').removeAttribute('hidden');
+    this.renderHeader();
+    document.getElementById('settings-info').innerHTML =
+      `Connected to <strong>${this.config.owner}/${this.config.repo}</strong>`;
+  },
+
+  async load() {
+    this.loading = true;
+    this.sessions = [];
+    document.getElementById('btn-refresh').classList.add('spinning');
+    this.rerender();
+
+    try {
+      const files = await this.api.list();
+
+      // Fetch ±14 days around today
+      const from = D.add(this.weekStart, -1);
+      const to   = D.add(this.weekStart, 14);
+
+      const relevant = files.filter(f => {
+        const m = f.name.match(/^(\d{4}-\d{2}-\d{2})/);
+        return m && m[1] >= from && m[1] <= to;
+      });
+
+      const results = await Promise.allSettled(relevant.map(f => this.api.get(f.path)));
+
+      this.sessions = results
+        .filter(r => r.status === 'fulfilled')
+        .map(r => {
+          const { content, sha, path } = r.value;
+          return { path, sha, fm: FM.parse(content), raw: content };
+        });
+
+    } catch (err) {
+      this.loading = false;
+      document.getElementById('btn-refresh').classList.remove('spinning');
+      this.renderError(err.message);
+      return;
+    }
+
+    this.loading = false;
+    document.getElementById('btn-refresh').classList.remove('spinning');
+    this.renderHeader();
+    this.rerender();
+  },
+
+  // Sessions for a specific date (using date_planned)
+  forDate(d) {
+    const order = ['lift', 'swim', 'bike', 'run', 'race'];
+    return this.sessions
+      .filter(s => s.fm.date_planned === d)
+      .sort((a, b) => order.indexOf(a.fm.discipline) - order.indexOf(b.fm.discipline));
+  },
+
+  renderHeader() {
+    document.getElementById('date-label').textContent = D.longFormat(this.today);
+    const todaySess = this.forDate(this.today);
+    const wk    = todaySess[0]?.fm?.week;
+    const phase = todaySess[0]?.fm?.phase;
+    let html = wk ? `Week ${wk}` : '';
+    if (phase) html += ` <span class="badge ${phase}">${phase}</span>`;
+    document.getElementById('week-label').innerHTML = html;
+  },
+
+  setView(v) {
+    this.view = v;
+    ['today','week','settings'].forEach(n => {
+      document.getElementById(`v-${n}`).hidden = n !== v;
+    });
+    document.querySelectorAll('#nav button').forEach(b => {
+      b.classList.toggle('active', b.dataset.view === v);
+    });
+    this.rerender();
+  },
+
+  rerender() {
+    if (this.view === 'today')    this.renderToday();
+    else if (this.view === 'week') this.renderWeek();
+  },
+
+  // ── Today View ──────────────────────────────────────
+  renderToday() {
+    const el = document.getElementById('v-today');
+    if (this.loading) {
+      el.innerHTML = `<div class="section-label">TODAY</div>
+        <div class="card-list"><div class="skel"></div><div class="skel"></div></div>`;
+      return;
+    }
+
+    const sessions = this.forDate(this.today);
+    if (!sessions.length) {
+      el.innerHTML = `<div class="rest"><div class="rest-icon">💤</div>
+        <div class="rest-label">Rest day</div>
+        <div style="font-size:.8rem;margin-top:.2rem">Recovery is training.</div></div>`;
+      return;
+    }
+
+    const totalMins  = sessions.reduce((s, x) => s + (x.fm.duration_planned || 0), 0);
+    const doneCount  = sessions.filter(s => s.fm.completed).length;
+    const loadChips  = ['swim','bike','run','lift']
+      .filter(d => sessions.some(s => s.fm.discipline === d))
+      .map(d => `<span class="load-chip"><span class="load-dot" style="background:${DISC.color(d)}"></span>${d}</span>`)
+      .join('');
+
+    el.innerHTML = `
+      <div class="section-label">TODAY</div>
+      <div class="load-summary">
+        <span>${DISC.dur(totalMins)}</span>
+        <span style="color:var(--text-3)">·</span>
+        ${loadChips}
+        ${doneCount ? `<span style="color:var(--text-3)">·</span><span style="color:#10b981">${doneCount}/${sessions.length} done</span>` : ''}
+      </div>
+      <div class="card-list">
+        ${sessions.map(s => this.buildCard(s)).join('')}
+      </div>`;
+  },
+
+  // ── Week View ──────────────────────────────────────
+  renderWeek() {
+    const el    = document.getElementById('v-week');
+    const days  = D.weekDays(this.weekStart);
+
+    const strip = days.map(d => {
+      const sess  = this.forDate(d);
+      const { name, num } = D.shortFormat(d);
+      const isSel = d === this.selDay;
+      const isToday = d === this.today;
+      const dots  = sess.map(s =>
+        `<span class="wdot" style="background:${DISC.color(s.fm.discipline)};opacity:${s.fm.completed ? .25 : 1}"></span>`
+      ).join('');
+      return `<button class="wday${isSel?' sel':''}" data-day="${d}">
+        <span class="wday-name" style="${isToday&&!isSel?'color:var(--c-swim)':''}">${name}</span>
+        <span class="wday-num">${num}</span>
+        <span class="wday-dots">${dots}</span>
+      </button>`;
+    }).join('');
+
+    const selSessions = this.forDate(this.selDay);
+    const selLabel    = this.selDay === this.today ? 'TODAY' : D.longFormat(this.selDay).toUpperCase();
+
+    const cardsHtml = selSessions.length
+      ? `<div class="card-list">${selSessions.map(s => this.buildCard(s)).join('')}</div>`
+      : `<div class="rest" style="padding:1.5rem 1rem">
+           <div class="rest-icon">💤</div><div class="rest-label">Rest day</div></div>`;
+
+    el.innerHTML = `
+      <div class="week-strip">${strip}</div>
+      <div class="section-label" style="padding-top:.25rem">${selLabel}</div>
+      ${cardsHtml}`;
+
+    el.querySelectorAll('.wday').forEach(btn => {
+      btn.addEventListener('click', () => { this.selDay = btn.dataset.day; this.renderWeek(); });
+    });
+  },
+
+  // ── Build Card ──────────────────────────────────────
+  buildCard(s) {
+    const { fm, path } = s;
+    const isOpen   = this.openCard  === path;
+    const shiftOpen = this.shiftOpen === path;
+    const isDone   = fm.completed === true;
+    const color    = DISC.color(fm.discipline);
+    const body     = extractBody(s.raw);
+
+    const shiftBtns = [-2,-1,1,2,3].map(n => {
+      const nd = D.add(fm.date_planned, n);
+      const sign = n > 0 ? `+${n}d` : `${n}d`;
+      return `<button class="shift-btn" data-action="shift-day" data-path="${path}" data-date="${nd}">${sign} · ${D.shiftLabel(nd)}</button>`;
+    }).join('');
+
+    return `
+<div class="card${isDone?' done':''}${isOpen?' open':''}" data-path="${path}">
+  <div class="card-inner" style="border-left-color:${color}">
+    <div class="card-header" data-action="toggle" data-path="${path}">
+      <span class="disc-dot" style="background:${color}"></span>
+      <div class="card-meta">
+        <div class="card-title">${DISC.label(fm.discipline, fm.session_type)}${fm.adhoc ? ' <span class="opt-badge">optional</span>' : ''}</div>
+        ${fm.session_type === 'brick' ? '<div class="card-sub">off the long bike</div>' : ''}
+      </div>
+      <div class="card-right">
+        <span class="card-dur">${DISC.dur(fm.duration_planned)}</span>
+        ${isDone ? '<span class="card-check">✓</span>' : ''}
+      </div>
+    </div>
+    <div class="card-body">
+      <p class="card-desc">${body || fm.description || ''}</p>
+      <div class="actions">
+        ${isDone
+          ? `<button class="btn-done-already" disabled>✓ Done</button>`
+          : `<button class="btn-done" data-action="complete" data-path="${path}">Mark Done</button>`}
+        <button class="btn-shift" data-action="shift-toggle" data-path="${path}">${shiftOpen ? 'Cancel' : 'Shift day'}</button>
+      </div>
+      <div class="shift-picker${shiftOpen?' open':''}">
+        <div class="shift-label">Move session to</div>
+        <div class="shift-days">${shiftBtns}</div>
+      </div>
+    </div>
+  </div>
+</div>`;
+  },
+
+  renderError(msg) {
+    const el = document.getElementById(this.view === 'today' ? 'v-today' : 'v-week');
+    el.innerHTML = `<div class="error-state">
+      <p>Could not load sessions.<br><small style="color:var(--text-3)">${msg}</small></p>
+      <button class="btn-primary" id="btn-retry">Retry</button></div>`;
+    document.getElementById('btn-retry')?.addEventListener('click', () => this.load());
+  },
+
+  // ── Actions ─────────────────────────────────────────
+  async markDone(path) {
+    const s = this.sessions.find(x => x.path === path);
+    if (!s) return;
+    s.fm.completed = true;
+    s.fm.date_completed = this.today;
+    this.openCard = null;
+    this.rerender();
+    try {
+      const updated = FM.set(s.raw, { completed: 'true', date_completed: this.today });
+      const res = await this.api.put(s.path, updated, s.sha,
+        `plan: complete ${s.path.split('/').pop()}`);
+      s.raw = updated;
+      s.sha = res.content.sha;
+    } catch (err) {
+      s.fm.completed = false;
+      s.fm.date_completed = null;
+      this.rerender();
+      alert(`Save failed: ${err.message}`);
+    }
+  },
+
+  async shiftSession(path, newDate) {
+    const s = this.sessions.find(x => x.path === path);
+    if (!s) return;
+    const oldDate = s.fm.date_planned;
+    s.fm.date_planned = newDate;
+    this.shiftOpen = null;
+    this.openCard  = null;
+    this.rerender();
+    try {
+      const updated = FM.set(s.raw, { date_planned: newDate });
+      const res = await this.api.put(s.path, updated, s.sha,
+        `plan: shift ${s.path.split('/').pop()} → ${newDate}`);
+      s.raw = updated;
+      s.sha = res.content.sha;
+    } catch (err) {
+      s.fm.date_planned = oldDate;
+      this.rerender();
+      alert(`Shift failed: ${err.message}`);
+    }
+  },
+
+  // ── Event Delegation ────────────────────────────────
+  bindEvents() {
+    // Setup
+    document.getElementById('btn-connect').addEventListener('click', () => {
+      const owner = document.getElementById('in-owner').value.trim();
+      const repo  = document.getElementById('in-repo').value.trim();
+      const token = document.getElementById('in-token').value.trim();
+      if (!owner || !repo || !token) { alert('All fields are required.'); return; }
+      saveConfig(owner, repo, token);
+      this.config = { owner, repo, token };
+      this.api    = makeAPI(this.config);
+      this.showApp();
+      this.load();
+    });
+
+    // Nav
+    document.getElementById('nav').addEventListener('click', e => {
+      const btn = e.target.closest('button[data-view]');
+      if (btn) this.setView(btn.dataset.view);
+    });
+
+    // Refresh
+    document.getElementById('btn-refresh').addEventListener('click', () => this.load());
+
+    // Settings reset
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      localStorage.removeItem('tri-cfg');
+      localStorage.removeItem('tri-tok');
+      location.reload();
+    });
+
+    // Card interactions (delegated)
+    document.getElementById('content').addEventListener('click', e => {
+      const action = e.target.closest('[data-action]')?.dataset?.action;
+      const path   = e.target.closest('[data-action]')?.dataset?.path;
+
+      if (action === 'toggle') {
+        this.openCard  = this.openCard === path ? null : path;
+        this.shiftOpen = null;
+        this.rerender();
+      } else if (action === 'complete') {
+        this.markDone(path);
+      } else if (action === 'shift-toggle') {
+        this.shiftOpen = this.shiftOpen === path ? null : path;
+        this.rerender();
+      } else if (action === 'shift-day') {
+        const date = e.target.closest('[data-action]').dataset.date;
+        this.shiftSession(path, date);
+      }
+    });
+  }
+};
+
+// ══════════════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════════════
+App.bindEvents();
+App.init();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

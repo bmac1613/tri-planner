@@ -1,0 +1,18 @@
+{
+  "name": "Triathlon Planner",
+  "short_name": "Tri Planner",
+  "description": "Daily training plan — Tremblant 70.3 & Ironman Maryland",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
