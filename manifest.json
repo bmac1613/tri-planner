@@ -1,7 +1,7 @@
 {
   "name": "Triathlon Planner",
   "short_name": "Tri Planner",
-  "description": "Daily training plan — Tremblant 70.3 & Ironman Maryland",
+  "description": "Daily training plan — triathlon, Rio prep and more",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f1f5f9",
