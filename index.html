@@ -638,6 +638,7 @@ const App = {
     this.renderHeader();
     document.getElementById('settings-info').innerHTML =
       `Connected to <strong>${this.config.owner}/${this.config.repo}</strong>`;
+    this.renderSettings();
   },
 
   async load() {
