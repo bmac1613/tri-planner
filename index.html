@@ -24,6 +24,7 @@
       --c-run:  #10b981;
       --c-lift: #8b5cf6;
       --c-race: #ef4444;
+      --c-mob:  #14b8a6;
       --c-def:  #64748b;
 
       --safe-top:    env(safe-area-inset-top, 20px);
@@ -572,7 +573,7 @@ function makeAPI({ owner, repo, token }) {
 const DISC = {
   color(d) {
     return { swim:'var(--c-swim)', bike:'var(--c-bike)', run:'var(--c-run)',
-             lift:'var(--c-lift)', race:'var(--c-race)' }[d] || 'var(--c-def)';
+             lift:'var(--c-lift)', race:'var(--c-race)', mobility:'var(--c-mob)' }[d] || 'var(--c-def)';
   },
   label(discipline, type) {
     return `${(discipline||'').toUpperCase()} · ${type||''}`;
@@ -694,7 +695,7 @@ const App = {
 
   // Sessions for a specific date (using date_planned)
   forDate(d) {
-    const order = ['lift', 'swim', 'bike', 'run', 'race'];
+    const order = ['mobility', 'lift', 'swim', 'bike', 'run', 'race'];
     return this.sessions
       .filter(s => s.fm.date_planned === d)
       .filter(s => this.plan === 'all' || s.fm.race_target === this.plan)
@@ -748,7 +749,7 @@ const App = {
 
     const totalMins  = sessions.reduce((s, x) => s + (x.fm.duration_planned || 0), 0);
     const doneCount  = sessions.filter(s => s.fm.completed).length;
-    const loadChips  = ['swim','bike','run','lift']
+    const loadChips  = ['mobility','swim','bike','run','lift']
       .filter(d => sessions.some(s => s.fm.discipline === d))
       .map(d => `<span class="load-chip"><span class="load-dot" style="background:${DISC.color(d)}"></span>${d}</span>`)
       .join('');

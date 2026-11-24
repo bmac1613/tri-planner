@@ -1,4 +1,4 @@
-const CACHE = 'tri-planner-v2';
+const CACHE = 'tri-planner-v3';
 
 self.addEventListener('install', e => {
   e.waitUntil(
