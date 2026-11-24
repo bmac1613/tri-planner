@@ -24,6 +24,7 @@
       --c-run:  #10b981;
       --c-lift: #8b5cf6;
       --c-race: #ef4444;
+      --c-mob:  #14b8a6;
       --c-def:  #64748b;
 
       --safe-top:    env(safe-area-inset-top, 20px);
@@ -217,6 +218,22 @@
       margin-bottom: .75rem;
     }
     .card-desc strong { color: var(--text); }
+    .card-desc a { color: var(--c-swim); }
+    .loc-chip {
+      display: inline-block; font-size: .65rem; font-weight: 600;
+      padding: .1rem .45rem; border-radius: 999px; margin-top: .2rem;
+      background: var(--border); color: var(--text-2);
+    }
+    .loc-chip.full-gym { background:#fee2e2; color:#b91c1c; }
+    @media (prefers-color-scheme: dark) {
+      .loc-chip.full-gym { background:#450a0a; color:#fca5a5; }
+    }
+    .settings-block select, .settings-block input {
+      width: 100%; margin-top: .35rem; padding: .55rem .65rem; font: inherit;
+      border: 1.5px solid var(--border); border-radius: 10px;
+      background: var(--bg, transparent); color: var(--text);
+    }
+    .settings-block label { display:block; margin-top: .85rem; font-weight: 600; color: var(--text); }
 
     .actions { display: flex; gap: .5rem; }
 
@@ -350,6 +367,11 @@
       <div class="section-label">Configuration</div>
       <div class="settings-block">
         <div id="settings-info"></div>
+        <label for="sel-plan">Plan</label>
+        <select id="sel-plan"></select>
+        <label for="in-paths">Plan folders <span style="font-weight:400;color:var(--text-3)">(comma-separated)</span></label>
+        <input id="in-paths" type="text" autocapitalize="none" autocorrect="off" spellcheck="false">
+        <button class="btn-primary" id="btn-save-paths" style="margin-top:.6rem;width:100%">Save folders &amp; reload</button>
         <button class="btn-primary" id="btn-reset" style="margin-top:1rem;width:100%">Reset &amp; Reconnect</button>
       </div>
     </div>
@@ -366,8 +388,39 @@
 // ══════════════════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════════════════
-const PLAN_PATH  = 'triathlon/plan';
+const DEFAULT_PATHS = ['triathlon/plan'];
 const GITHUB_API = 'https://api.github.com';
+
+// Friendly names for race_target values. Unknown targets show as-is.
+const PLAN_NAMES = {
+  'rio-2026':       'Rio prep',
+  'maryland-im':    'Ironman Maryland',
+  'tremblant-70.3': 'Tremblant 70.3'
+};
+const planName = t => PLAN_NAMES[t] || t;
+
+// Where a session happens (frontmatter `location`).
+const LOC_NAMES = {
+  'full-gym':      'Full gym',
+  'apartment-gym': 'Apartment gym',
+  'outside':       'Outside / treadmill',
+  'pool':          'Pool',
+  'bike':          'Bike / trainer',
+  'anywhere':      'Anywhere',
+  'home':          'Home'
+};
+
+function loadPaths() {
+  try {
+    const p = JSON.parse(localStorage.getItem('tri-paths') || 'null');
+    return Array.isArray(p) && p.length ? p : DEFAULT_PATHS;
+  } catch { return DEFAULT_PATHS; }
+}
+function savePaths(paths) { localStorage.setItem('tri-paths', JSON.stringify(paths)); }
+
+// 'all' or a race_target value
+function loadPlan()  { try { return localStorage.getItem('tri-plan') || 'all'; } catch { return 'all'; } }
+function savePlan(p) { try { localStorage.setItem('tri-plan', p); } catch {} }
 
 function loadConfig() {
   try {
@@ -480,9 +533,9 @@ function makeAPI({ owner, repo, token }) {
   }
 
   return {
-    async list() {
-      const r = await fetch(`${base}/${PLAN_PATH}`, { headers: h });
-      if (!r.ok) throw new Error(`GitHub ${r.status}: ${r.statusText}`);
+    async list(dir) {
+      const r = await fetch(`${base}/${dir}`, { headers: h });
+      if (!r.ok) throw new Error(`GitHub ${r.status} reading ${dir}: ${r.statusText}`);
       return r.json();
     },
     async get(path) {
@@ -520,7 +573,7 @@ function makeAPI({ owner, repo, token }) {
 const DISC = {
   color(d) {
     return { swim:'var(--c-swim)', bike:'var(--c-bike)', run:'var(--c-run)',
-             lift:'var(--c-lift)', race:'var(--c-race)' }[d] || 'var(--c-def)';
+             lift:'var(--c-lift)', race:'var(--c-race)', mobility:'var(--c-mob)' }[d] || 'var(--c-def)';
   },
   label(discipline, type) {
     return `${(discipline||'').toUpperCase()} · ${type||''}`;
@@ -535,7 +588,12 @@ const DISC = {
 function extractBody(raw) {
   const m = raw.match(/\n# .+\n\n([\s\S]*?)(?:\n\nTopics:|$)/);
   if (!m) return '';
-  return m[1].trim().replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  const esc = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return esc(m[1].trim())
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\n{2,}/g, '<br><br>')
+    .replace(/\n/g, '<br>');
 }
 
 // ══════════════════════════════════════════════════════
@@ -552,8 +610,13 @@ const App = {
   selDay:   null,
   openCard: null,
   shiftOpen: null,
+  paths:    DEFAULT_PATHS,
+  plan:     'all',
+  plans:    [],   // race_target values seen in loaded sessions
 
   async init() {
+    this.paths = loadPaths();
+    this.plan  = loadPlan();
     this.weekStart = D.weekStart(this.today);
     this.selDay    = this.today;
     this.config    = loadConfig();
@@ -584,7 +647,8 @@ const App = {
     this.rerender();
 
     try {
-      const files = await this.api.list();
+      const lists = await Promise.all(this.paths.map(p => this.api.list(p)));
+      const files = lists.flat().filter(f => f.type === 'file' && f.name.endsWith('.md'));
 
       // Fetch ±14 days around today
       const from = D.add(this.weekStart, -1);
@@ -604,6 +668,8 @@ const App = {
           return { path, sha, fm: FM.parse(content), raw: content };
         });
 
+      this.plans = [...new Set(this.sessions.map(s => s.fm.race_target).filter(Boolean))].sort();
+
     } catch (err) {
       this.loading = false;
       document.getElementById('btn-refresh').classList.remove('spinning');
@@ -614,14 +680,25 @@ const App = {
     this.loading = false;
     document.getElementById('btn-refresh').classList.remove('spinning');
     this.renderHeader();
+    this.renderSettings();
     this.rerender();
+  },
+
+  renderSettings() {
+    const sel = document.getElementById('sel-plan');
+    const opts = [...new Set([...this.plans, ...(this.plan !== 'all' ? [this.plan] : [])])];
+    sel.innerHTML = `<option value="all">All plans</option>` +
+      opts.map(t => `<option value="${t}"${t === this.plan ? ' selected' : ''}>${planName(t)}</option>`).join('');
+    sel.value = this.plan;
+    document.getElementById('in-paths').value = this.paths.join(', ');
   },
 
   // Sessions for a specific date (using date_planned)
   forDate(d) {
-    const order = ['lift', 'swim', 'bike', 'run', 'race'];
+    const order = ['mobility', 'lift', 'swim', 'bike', 'run', 'race'];
     return this.sessions
       .filter(s => s.fm.date_planned === d)
+      .filter(s => this.plan === 'all' || s.fm.race_target === this.plan)
       .sort((a, b) => order.indexOf(a.fm.discipline) - order.indexOf(b.fm.discipline));
   },
 
@@ -632,6 +709,8 @@ const App = {
     const phase = todaySess[0]?.fm?.phase;
     let html = wk ? `Week ${wk}` : '';
     if (phase) html += ` <span class="badge ${phase}">${phase}</span>`;
+    const target = todaySess[0]?.fm?.race_target || (this.plan !== 'all' ? this.plan : null);
+    if (target) html += ` <span class="badge">${planName(target)}</span>`;
     document.getElementById('week-label').innerHTML = html;
   },
 
@@ -670,7 +749,7 @@ const App = {
 
     const totalMins  = sessions.reduce((s, x) => s + (x.fm.duration_planned || 0), 0);
     const doneCount  = sessions.filter(s => s.fm.completed).length;
-    const loadChips  = ['swim','bike','run','lift']
+    const loadChips  = ['mobility','swim','bike','run','lift']
       .filter(d => sessions.some(s => s.fm.discipline === d))
       .map(d => `<span class="load-chip"><span class="load-dot" style="background:${DISC.color(d)}"></span>${d}</span>`)
       .join('');
@@ -749,6 +828,7 @@ const App = {
       <div class="card-meta">
         <div class="card-title">${DISC.label(fm.discipline, fm.session_type)}${fm.adhoc ? ' <span class="opt-badge">optional</span>' : ''}</div>
         ${fm.session_type === 'brick' ? '<div class="card-sub">off the long bike</div>' : ''}
+        ${fm.location ? `<span class="loc-chip ${fm.location}">${LOC_NAMES[fm.location] || fm.location}</span>` : ''}
       </div>
       <div class="card-right">
         <span class="card-dur">${DISC.dur(fm.duration_planned)}</span>
@@ -858,10 +938,29 @@ const App = {
     // Refresh
     document.getElementById('btn-refresh').addEventListener('click', () => this.load());
 
+    // Plan filter
+    document.getElementById('sel-plan').addEventListener('change', e => {
+      this.plan = e.target.value;
+      savePlan(this.plan);
+      this.renderHeader();
+      this.rerender();
+    });
+
+    // Plan folders
+    document.getElementById('btn-save-paths').addEventListener('click', () => {
+      const paths = document.getElementById('in-paths').value
+        .split(',').map(x => x.trim().replace(/^\/+|\/+$/g, '')).filter(Boolean);
+      this.paths = paths.length ? paths : DEFAULT_PATHS;
+      savePaths(this.paths);
+      this.load();
+    });
+
     // Settings reset
     document.getElementById('btn-reset').addEventListener('click', () => {
       localStorage.removeItem('tri-cfg');
       localStorage.removeItem('tri-tok');
+      localStorage.removeItem('tri-paths');
+      localStorage.removeItem('tri-plan');
       location.reload();
     });
 
